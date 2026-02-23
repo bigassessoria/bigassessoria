@@ -1,6 +1,6 @@
 'use client';
 
-import { useReducer, useCallback, useEffect, useRef } from 'react';
+import { useReducer, useCallback, useEffect, useRef, Suspense } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { playTransition } from '@/hooks/useSoundFX';
 import {
@@ -27,6 +27,8 @@ import {
 import { InstallLayout } from '@/components/install/InstallLayout';
 import { StepCard } from '@/components/install/StepCard';
 import {
+  LicenseForm,
+  GitHubForm,
   IdentityForm,
   VercelForm,
   SupabaseForm,
@@ -78,8 +80,7 @@ function getInitialState() {
 // MAIN PAGE
 // =============================================================================
 
-export default function InstallPage() {
-  // ✅ MELHORIA: Apenas 1 useReducer, data está DENTRO do state
+function InstallPageContent() {
   const [state, dispatch] = useReducer(installReducer, undefined, getInitialState);
   const prevStepRef = useRef<number | null>(null);
 
@@ -160,8 +161,10 @@ export default function InstallPage() {
       1: 'cyan',
       2: 'magenta',
       3: 'cyan',
-      4: 'orange',
-      5: 'red',
+      4: 'magenta',
+      5: 'cyan',
+      6: 'orange',
+      7: 'red',
     };
 
     const renderForm = () => {
@@ -174,14 +177,18 @@ export default function InstallPage() {
 
       switch (step) {
         case 1:
-          return <IdentityForm key="identity" {...formProps} />;
+          return <LicenseForm key="license" {...formProps} />;
         case 2:
-          return <VercelForm key="vercel" {...formProps} />;
+          return <GitHubForm key="github" {...formProps} />;
         case 3:
-          return <SupabaseForm key="supabase" {...formProps} />;
+          return <IdentityForm key="identity" {...formProps} />;
         case 4:
-          return <QStashForm key="qstash" {...formProps} />;
+          return <VercelForm key="vercel" {...formProps} />;
         case 5:
+          return <SupabaseForm key="supabase" {...formProps} />;
+        case 6:
+          return <QStashForm key="qstash" {...formProps} />;
+        case 7:
           return <RedisForm key="redis" {...formProps} />;
         default:
           return null;
@@ -189,7 +196,7 @@ export default function InstallPage() {
     };
 
     return (
-      <InstallLayout currentStep={step} totalSteps={5}>
+      <InstallLayout currentStep={step} totalSteps={7}>
         {/* Botão "Voltar" removido - já existe dentro dos forms */}
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div
@@ -263,6 +270,13 @@ export default function InstallPage() {
     );
   }
 
-  // Fallback (should never happen)
   return null;
+}
+
+export default function InstallPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-[var(--br-void-black)]"><div className="w-8 h-8 border-2 border-[var(--br-neon-cyan)] border-t-transparent rounded-full animate-spin" /></div>}>
+      <InstallPageContent />
+    </Suspense>
+  );
 }

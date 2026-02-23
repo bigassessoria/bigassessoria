@@ -35,6 +35,15 @@ export function ProvisioningView({ data, progress, title, subtitle, onProgress, 
     abortControllerRef.current = new AbortController();
 
     const payload: ProvisionPayload = {
+      ...(data.licenseCode && {
+        license: { id: data.licenseId, code: data.licenseCode },
+      }),
+      ...(data.githubForkUrl && {
+        github: {
+          forkUrl: data.githubForkUrl,
+          fullName: data.githubForkUrl.replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '').split('?')[0] || undefined,
+        },
+      }),
       identity: {
         name: data.name,
         email: data.email,
@@ -109,7 +118,7 @@ export function ProvisioningView({ data, progress, title, subtitle, onProgress, 
       onProgress({
         type: 'error',
         error: err instanceof Error ? err.message : 'Erro desconhecido',
-        returnToStep: 1,
+        returnToStep: 4,
       });
     }
   }, [data, onProgress]);

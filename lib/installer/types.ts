@@ -16,7 +16,7 @@
 // =============================================================================
 
 /** Versão do schema - incrementar quando mudar a estrutura de InstallData */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 /** Flag para habilitar logs de debug (desabilitar em produção) */
 export const DEBUG = process.env.NODE_ENV === 'development';
@@ -47,6 +47,11 @@ export const VALIDATION = {
 // =============================================================================
 
 export interface InstallData {
+  licenseId?: string;
+  licenseCode: string;
+  githubUsername: string;
+  githubToken: string;
+  githubForkUrl: string;
   name: string;
   email: string;
   password: string;
@@ -58,6 +63,10 @@ export interface InstallData {
 }
 
 export const EMPTY_INSTALL_DATA: InstallData = {
+  licenseCode: '',
+  githubUsername: '',
+  githubToken: '',
+  githubForkUrl: '',
   name: '',
   email: '',
   password: '',
@@ -72,7 +81,7 @@ export const EMPTY_INSTALL_DATA: InstallData = {
 // VALIDAÇÃO POR STEP (NOVO)
 // =============================================================================
 
-export type InstallStep = 1 | 2 | 3 | 4 | 5;
+export type InstallStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 /**
  * Valida formato de email usando regex.
@@ -87,20 +96,24 @@ export function isValidEmail(email: string): boolean {
 
 /** Funções que validam se um step está completo */
 export const stepValidators: Record<InstallStep, (data: InstallData) => boolean> = {
-  1: (data) => Boolean(data.name && isValidEmail(data.email) && data.password),
-  2: (data) => Boolean(data.vercelToken),
-  3: (data) => Boolean(data.supabasePat),
-  4: (data) => Boolean(data.qstashToken),
-  5: (data) => Boolean(data.redisRestUrl && data.redisRestToken),
+  1: (data) => Boolean(data.licenseCode && data.licenseCode.length >= 6),
+  2: (data) => Boolean(data.githubUsername && data.githubToken && data.githubForkUrl),
+  3: (data) => Boolean(data.name && isValidEmail(data.email) && data.password),
+  4: (data) => Boolean(data.vercelToken),
+  5: (data) => Boolean(data.supabasePat),
+  6: (data) => Boolean(data.qstashToken),
+  7: (data) => Boolean(data.redisRestUrl && data.redisRestToken),
 };
 
 /** Campos requeridos por step (para mensagens de erro) */
 export const stepRequiredFields: Record<InstallStep, (keyof InstallData)[]> = {
-  1: ['name', 'email', 'password'],
-  2: ['vercelToken'],
-  3: ['supabasePat'],
-  4: ['qstashToken'],
-  5: ['redisRestUrl', 'redisRestToken'],
+  1: ['licenseCode'],
+  2: ['githubUsername', 'githubToken', 'githubForkUrl'],
+  3: ['name', 'email', 'password'],
+  4: ['vercelToken'],
+  5: ['supabasePat'],
+  6: ['qstashToken'],
+  7: ['redisRestUrl', 'redisRestToken'],
 };
 
 // =============================================================================
@@ -227,6 +240,8 @@ export function assertNever(x: never): never {
 // =============================================================================
 
 export interface ProvisionPayload {
+  license?: { id?: string; code: string };
+  github?: { forkUrl: string; fullName?: string };
   identity: {
     name: string;
     email: string;
@@ -248,13 +263,15 @@ export interface ProvisionPayload {
 }
 
 // =============================================================================
-// STEP METADATA (sem mudanças)
+// STEP METADATA
 // =============================================================================
 
 export const STEP_META: Record<InstallStep, { title: string; service: string }> = {
-  1: { title: 'Identidade', service: 'identity' },
-  2: { title: 'Vercel', service: 'vercel' },
-  3: { title: 'Supabase', service: 'supabase' },
-  4: { title: 'QStash', service: 'qstash' },
-  5: { title: 'Redis', service: 'redis' },
+  1: { title: 'Licença', service: 'license' },
+  2: { title: 'GitHub', service: 'github' },
+  3: { title: 'Identidade', service: 'identity' },
+  4: { title: 'Vercel', service: 'vercel' },
+  5: { title: 'Supabase', service: 'supabase' },
+  6: { title: 'QStash', service: 'qstash' },
+  7: { title: 'Redis', service: 'redis' },
 };

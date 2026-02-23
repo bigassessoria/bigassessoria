@@ -20,6 +20,7 @@
  */
 
 import { z } from 'zod';
+import { getSupabaseAdmin } from '@/lib/supabase';
 import { runSchemaMigration, checkSchemaApplied } from '@/lib/installer/migrations';
 import { bootstrapInstance } from '@/lib/installer/bootstrap';
 import { triggerProjectRedeploy, upsertProjectEnvs, waitForVercelDeploymentReady, disableDeploymentProtection } from '@/lib/installer/vercel';
@@ -41,6 +42,18 @@ export const runtime = 'nodejs';
 // =============================================================================
 
 const ProvisionSchema = z.object({
+  license: z
+    .object({
+      id: z.string().uuid().optional(),
+      code: z.string().min(6),
+    })
+    .optional(),
+  github: z
+    .object({
+      forkUrl: z.string().url(),
+      fullName: z.string().optional(),
+    })
+    .optional(),
   identity: z.object({
     name: z.string().min(2),
     email: z.string().email(),
@@ -84,18 +97,18 @@ interface Step {
 }
 
 const STEPS: Step[] = [
-  { id: 'validate_vercel', title: 'Conectando Link Neural...', subtitle: 'Autenticando com servidor de deploy', weight: 5, returnToStep: 2 },
-  { id: 'validate_supabase', title: 'Escaneando Memória Base...', subtitle: 'Verificando credenciais Supabase', weight: 5, returnToStep: 3 },
-  { id: 'create_project', title: 'Criando Unidade...', subtitle: 'Alocando nova instância de memória', weight: 10, returnToStep: 3 },
-  { id: 'wait_project', title: 'Incubando Unidade...', subtitle: 'Aguardando células se multiplicarem', weight: 15, returnToStep: 3 },
-  { id: 'resolve_keys', title: 'Extraindo DNA...', subtitle: 'Resolvendo chaves de acesso', weight: 5, returnToStep: 3 },
-  { id: 'validate_qstash', title: 'Calibrando Transmissão...', subtitle: 'Verificando canal de mensagens', weight: 5, returnToStep: 4 },
-  { id: 'validate_redis', title: 'Inicializando Cache...', subtitle: 'Testando memória temporária', weight: 5, returnToStep: 5 },
-  { id: 'setup_envs', title: 'Implantando Memórias...', subtitle: 'Configurando variáveis de ambiente', weight: 10, returnToStep: 2 },
-  { id: 'migrations', title: 'Estruturando Sinapses...', subtitle: 'Criando conexões neurais do banco', weight: 15, returnToStep: 3 },
-  { id: 'bootstrap', title: 'Registrando Baseline...', subtitle: 'Criando identidade administrativa', weight: 10, returnToStep: 1 },
-  { id: 'redeploy', title: 'Ativando Replicante...', subtitle: 'Fazendo deploy das configurações', weight: 10, returnToStep: 2 },
-  { id: 'wait_deploy', title: 'Despertar Iminente...', subtitle: 'Finalizando processo de incubação', weight: 5, returnToStep: 2 },
+  { id: 'validate_vercel', title: 'Conectando Link Neural...', subtitle: 'Autenticando com servidor de deploy', weight: 5, returnToStep: 4 },
+  { id: 'validate_supabase', title: 'Escaneando Memória Base...', subtitle: 'Verificando credenciais Supabase', weight: 5, returnToStep: 5 },
+  { id: 'create_project', title: 'Criando Unidade...', subtitle: 'Alocando nova instância de memória', weight: 10, returnToStep: 5 },
+  { id: 'wait_project', title: 'Incubando Unidade...', subtitle: 'Aguardando células se multiplicarem', weight: 15, returnToStep: 5 },
+  { id: 'resolve_keys', title: 'Extraindo DNA...', subtitle: 'Resolvendo chaves de acesso', weight: 5, returnToStep: 5 },
+  { id: 'validate_qstash', title: 'Calibrando Transmissão...', subtitle: 'Verificando canal de mensagens', weight: 5, returnToStep: 6 },
+  { id: 'validate_redis', title: 'Inicializando Cache...', subtitle: 'Testando memória temporária', weight: 5, returnToStep: 7 },
+  { id: 'setup_envs', title: 'Implantando Memórias...', subtitle: 'Configurando variáveis de ambiente', weight: 10, returnToStep: 4 },
+  { id: 'migrations', title: 'Estruturando Sinapses...', subtitle: 'Criando conexões neurais do banco', weight: 15, returnToStep: 5 },
+  { id: 'bootstrap', title: 'Registrando Baseline...', subtitle: 'Criando identidade administrativa', weight: 10, returnToStep: 3 },
+  { id: 'redeploy', title: 'Ativando Replicante...', subtitle: 'Fazendo deploy das configurações', weight: 10, returnToStep: 4 },
+  { id: 'wait_deploy', title: 'Despertar Iminente...', subtitle: 'Finalizando processo de incubação', weight: 5, returnToStep: 4 },
 ];
 
 // =============================================================================
@@ -353,7 +366,7 @@ export async function POST(req: Request) {
   }
 
   console.log('[provision] ✅ Payload válido');
-  const { identity, vercel, supabase, qstash, redis } = parsed.data;
+  const { identity, vercel, supabase, qstash, redis, license, github } = parsed.data;
 
   // Create SSE stream
   const encoder = new TextEncoder();
@@ -748,6 +761,43 @@ export async function POST(req: Request) {
         console.warn('[provision] ⚠️ Step 12/12: No deploymentId, skipping wait');
       }
       console.log('[provision] ✅ Step 12/12: Wait for Deploy - COMPLETO');
+
+      // Update license record with install data (logs/controle)
+      if (license?.code) {
+        const supabaseAdmin = getSupabaseAdmin();
+        if (supabaseAdmin) {
+          try {
+            const updatePayload = {
+              status: 'used',
+              used_at: new Date().toISOString(),
+              github_username: github?.fullName?.split('/')[0],
+              github_fork_url: github?.forkUrl,
+              vercel_project_id: vercelProject?.projectId,
+              supabase_project_ref: supabaseProject?.projectRef,
+              admin_name: identity.name,
+              admin_email: identity.email,
+              company_name: identity.name,
+              install_data_json: {
+                identity: parsed.data.identity,
+                github: parsed.data.github,
+                vercel: { token: '[REDACTED]' },
+                supabase: { pat: '[REDACTED]' },
+                qstash: { token: '[REDACTED]' },
+                redis: { restUrl: '[REDACTED]', restToken: '[REDACTED]' },
+              },
+            } as Record<string, unknown>;
+            const query = supabaseAdmin.from('licenses').update(updatePayload);
+            if (license.id) {
+              await query.eq('id', license.id);
+            } else {
+              await query.eq('code', license.code);
+            }
+            console.log('[provision] ✅ License record updated');
+          } catch (licenseErr) {
+            console.warn('[provision] ⚠️ Failed to update license:', licenseErr);
+          }
+        }
+      }
 
       // Complete!
       console.log('[provision] 🎉 PROVISIONING COMPLETE - ALL 12 STEPS DONE!');
