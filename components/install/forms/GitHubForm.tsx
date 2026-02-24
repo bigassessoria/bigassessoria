@@ -17,20 +17,26 @@ const GITHUB_TOKEN_MIN_LENGTH = 20;
  * Segunda tela do wizard. Valida token e cria fork do repositório.
  */
 export function GitHubForm({ data, onComplete, onBack, showBack }: FormProps) {
-  const [username, setUsername] = useState(data.githubUsername || '');
   const [token, setToken] = useState(data.githubToken || '');
+  const [repoName, setRepoName] = useState('');
   const [validating, setValidating] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [forkFullName, setForkFullName] = useState<string | null>(null);
   const [forkUrl, setForkUrl] = useState<string | null>(null);
 
-  const handleValidateAndFork = async () => {
-    const user = username.trim();
-    const tok = token.trim();
+  const isValidRepoName = (name: string) => /^[a-zA-Z0-9_.-]{1,100}$/.test(name);
 
-    if (!user) {
-      setError('Informe seu username do GitHub');
+  const handleValidateAndFork = async () => {
+    const tok = token.trim();
+    const repo = repoName.trim();
+
+    if (!repo) {
+      setError('Informe o nome do repositório');
+      return;
+    }
+    if (!isValidRepoName(repo)) {
+      setError('Nome do repositório inválido (use apenas letras, números, -, _ ou .)');
       return;
     }
     if (tok.length < GITHUB_TOKEN_MIN_LENGTH) {
@@ -48,7 +54,7 @@ export function GitHubForm({ data, onComplete, onBack, showBack }: FormProps) {
       const res = await fetch('/api/installer/github/fork', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: tok, username: user }),
+        body: JSON.stringify({ token: tok, repoName: repo }),
       });
 
       const result = await res.json();
@@ -62,8 +68,8 @@ export function GitHubForm({ data, onComplete, onBack, showBack }: FormProps) {
         throw new Error(result.error || 'Falha ao criar fork');
       }
 
-      setForkFullName(result.fullName || `${user}/repo`);
-      setForkUrl(result.forkUrl || `https://github.com/${result.fullName || user}`);
+      setForkFullName(result.fullName || result.repoName || repo);
+      setForkUrl(result.forkUrl || (result.fullName ? `https://github.com/${result.fullName}` : undefined));
       setSuccess(true);
     } catch (err) {
       const elapsed = Date.now() - startTime;
@@ -78,7 +84,6 @@ export function GitHubForm({ data, onComplete, onBack, showBack }: FormProps) {
 
   const handleSuccessComplete = () => {
     onComplete({
-      githubUsername: username.trim(),
       githubToken: token.trim(),
       githubForkUrl: forkUrl || (forkFullName ? `https://github.com/${forkFullName}` : undefined),
     });
@@ -127,25 +132,28 @@ export function GitHubForm({ data, onComplete, onBack, showBack }: FormProps) {
         </p>
       </div>
 
-      {/* Username */}
+      {/* Nome do repositório */}
       <div>
         <label className="block text-xs font-mono text-[var(--br-muted-cyan)] mb-2 uppercase tracking-wider">
-          {'>'} Username do GitHub
+          {'>'} Nome do repositório
         </label>
         <div className="relative">
           <Github className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--br-dust-gray)]" />
           <input
             type="text"
-            value={username}
+            value={repoName}
             onChange={(e) => {
-              setUsername(e.target.value);
+              setRepoName(e.target.value);
               setError(null);
             }}
-            placeholder="seu-usuario"
+            placeholder="ex: cliente-minha-loja-whatsapp"
             className={inputClass}
             autoFocus
           />
         </div>
+        <p className="mt-1 text-[10px] font-mono text-[var(--br-dust-gray)]">
+          Use apenas letras, números, hífen (-), underline (_) ou ponto (.). Esse será o nome do repositório no seu GitHub.
+        </p>
       </div>
 
       {/* Token */}
@@ -171,7 +179,8 @@ export function GitHubForm({ data, onComplete, onBack, showBack }: FormProps) {
         onClick={handleValidateAndFork}
         disabled={
           validating ||
-          !username.trim() ||
+          !repoName.trim() ||
+          !isValidRepoName(repoName.trim()) ||
           token.trim().length < GITHUB_TOKEN_MIN_LENGTH
         }
         className="w-full font-mono uppercase tracking-wider bg-[var(--br-neon-magenta)] hover:bg-[var(--br-neon-magenta)]/80 text-[var(--br-hologram-white)] font-bold shadow-[0_0_20px_var(--br-neon-magenta)/0.4] transition-all duration-200"
@@ -183,31 +192,62 @@ export function GitHubForm({ data, onComplete, onBack, showBack }: FormProps) {
         <details className="w-full group">
           <summary className="flex items-center justify-center gap-1.5 text-sm font-mono text-[var(--br-dust-gray)] hover:text-[var(--br-muted-cyan)] cursor-pointer list-none transition-colors">
             <ChevronDown className="w-3.5 h-3.5 transition-transform group-open:rotate-180" />
-            Como obter o token?
+            Como criar conta, token e repo?
           </summary>
           <div className="mt-3 p-3 rounded-lg bg-[var(--br-void-black)]/50 border border-[var(--br-dust-gray)]/30 text-left space-y-2">
-            <ol className="text-xs font-mono text-[var(--br-muted-cyan)] space-y-1.5 list-decimal list-inside">
+            <ol className="text-xs font-mono text-[var(--br-muted-cyan)] space-y-2 list-decimal list-inside">
               <li>
-                Acesse{' '}
-                <a
-                  href="https://github.com/settings/tokens"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[var(--br-neon-magenta)] hover:underline"
-                >
-                  github.com/settings/tokens
-                </a>
+                <span className="font-semibold text-[var(--br-hologram-white)]">Criar conta GitHub (se ainda não tiver)</span>
+                <ol className="mt-1 ml-4 list-disc space-y-1">
+                  <li>
+                    Acesse{' '}
+                    <a
+                      href="https://github.com/signup"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[var(--br-neon-magenta)] hover:underline"
+                    >
+                      github.com/signup
+                    </a>
+                  </li>
+                  <li>Preencha email, senha e escolha um username.</li>
+                  <li>Confirme o email para ativar a conta.</li>
+                </ol>
               </li>
               <li>
-                Clique em <strong className="text-[var(--br-hologram-white)]">Generate new token (classic)</strong>
+                <span className="font-semibold text-[var(--br-hologram-white)]">Gerar o token de acesso</span>
+                <ol className="mt-1 ml-4 list-disc space-y-1">
+                  <li>
+                    Acesse{' '}
+                    <a
+                      href="https://github.com/settings/tokens"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[var(--br-neon-magenta)] hover:underline"
+                    >
+                      github.com/settings/tokens
+                    </a>
+                  </li>
+                  <li>
+                    Clique em <strong className="text-[var(--br-hologram-white)]">Generate new token (classic)</strong>.
+                  </li>
+                  <li>
+                    Nome: <strong className="text-[var(--br-hologram-white)]">VozzySmart</strong> (ou similar).
+                  </li>
+                  <li>
+                    Marque o scope <strong className="text-[var(--br-hologram-white)]">repo</strong> (full control).
+                  </li>
+                  <li>Gere o token e copie imediatamente (ele só aparece uma vez).</li>
+                </ol>
               </li>
               <li>
-                Nome: <strong className="text-[var(--br-hologram-white)]">VozzySmart</strong> (ou outro)
+                <span className="font-semibold text-[var(--br-hologram-white)]">Escolher o nome do repositório e colar o token</span>
+                <ol className="mt-1 ml-4 list-disc space-y-1">
+                  <li>Defina um nome único para o repositório (ex.: <code>cliente-minha-loja-whatsapp</code>).</li>
+                  <li>Digite esse nome no campo \"Nome do repositório\" acima.</li>
+                  <li>Cole o token no campo de token e clique em <strong>Validar e criar fork</strong>.</li>
+                </ol>
               </li>
-              <li>
-                Marque o scope <strong className="text-[var(--br-hologram-white)]">repo</strong> (full control)
-              </li>
-              <li>Copie o token e cole acima</li>
             </ol>
           </div>
         </details>

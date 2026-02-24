@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const GITHUB_API = 'https://api.github.com';
+const REPO_NAME_REGEX = /^[a-zA-Z0-9_.-]{1,100}$/;
 
 export async function POST(req: NextRequest) {
   if (process.env.INSTALLER_ENABLED === 'false') {
@@ -24,11 +25,26 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { token, username } = body as { token?: string; username?: string };
+    const { token, repoName } = body as { token?: string; repoName?: string };
 
     if (!token || typeof token !== 'string') {
       return NextResponse.json(
         { error: 'Token GitHub é obrigatório' },
+        { status: 400 }
+      );
+    }
+
+    if (!repoName || typeof repoName !== 'string') {
+      return NextResponse.json(
+        { error: 'Nome do repositório é obrigatório' },
+        { status: 400 }
+      );
+    }
+
+    const normalizedRepoName = repoName.trim().toLowerCase();
+    if (!REPO_NAME_REGEX.test(normalizedRepoName)) {
+      return NextResponse.json(
+        { error: 'Nome do repositório inválido. Use apenas letras, números, -, _ ou . (até 100 caracteres).' },
         { status: 400 }
       );
     }
@@ -58,15 +74,15 @@ export async function POST(req: NextRequest) {
     }
 
     const userData = (await userRes.json()) as { login?: string; id?: number };
-    const resolvedUsername = username?.trim() || userData.login;
+    const resolvedUsername = userData.login;
     if (!resolvedUsername) {
       return NextResponse.json(
-        { error: 'Não foi possível obter o username do GitHub' },
+        { error: 'Não foi possível obter o usuário do GitHub a partir do token informado.' },
         { status: 400 }
       );
     }
 
-    // 2. Criar fork
+    // 2. Criar fork com nome específico
     const forkRes = await fetch(`${GITHUB_API}/repos/${sourceRepo}/forks`, {
       method: 'POST',
       headers: {
@@ -75,8 +91,8 @@ export async function POST(req: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        organization: undefined, // fork na conta do usuário
-        name: undefined, // mantém nome do repo
+        organization: undefined, // fork na conta do usuário autenticado
+        name: normalizedRepoName,
         default_branch_only: false,
       }),
     });
@@ -98,9 +114,9 @@ export async function POST(req: NextRequest) {
         );
       }
       if (msg.includes('already exists') || msg.includes('fork already exists')) {
-        // Fork já existe - buscar URL do fork do usuário
+        // Fork já existe - buscar URL do fork do usuário com o nome informado
         const repoRes = await fetch(
-          `${GITHUB_API}/repos/${resolvedUsername}/${sourceRepo.split('/')[1]}`,
+          `${GITHUB_API}/repos/${resolvedUsername}/${normalizedRepoName}`,
           {
             headers: {
               Authorization: `Bearer ${tokenTrimmed}`,
@@ -118,6 +134,10 @@ export async function POST(req: NextRequest) {
             alreadyExisted: true,
           });
         }
+        return NextResponse.json(
+          { error: 'Já existe um repositório com esse nome na sua conta GitHub. Escolha outro nome.' },
+          { status: 400 }
+        );
       }
 
       return NextResponse.json(
