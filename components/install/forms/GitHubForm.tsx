@@ -283,6 +283,7 @@ export function GitHubForm({ data, onComplete, onBack, showBack }: FormProps) {
                   </li>
                   <li>
                     Confira os dados no GitHub, clique em <strong className="text-[var(--br-hologram-white)]">Authorize</strong> e aguarde alguns segundos.
+                  </li>
                 </ol>
               </li>
               <li>
